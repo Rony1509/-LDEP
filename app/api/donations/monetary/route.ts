@@ -14,13 +14,18 @@ export async function GET() {
         id: d._id.toString(),
         donorId: d.donorId.toString(),
         donorName: d.donorName,
+        email: d.email,
         amount: d.amount,
         method: d.method,
         phone: d.phone,
         txHash: d.txHash,
         blockNumber: d.blockNumber,
+        manualTransactionId: d.manualTransactionId,
+        sslTransactionId: d.sslTransactionId,
         timestamp: d.createdAt.toISOString(),
         status: d.status,
+        verifiedAt: d.verifiedAt,
+        adminNote: d.adminNote,
       }))
     );
   } catch (err: unknown) {

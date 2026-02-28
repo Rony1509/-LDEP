@@ -13,4 +13,8 @@ const notificationSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-export default mongoose.model("Notification", notificationSchema);
+// Prevent model overwrite error in development
+const Notification = mongoose.models.Notification || 
+  mongoose.model("Notification", notificationSchema);
+
+export default Notification;

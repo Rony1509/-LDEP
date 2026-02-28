@@ -25,12 +25,21 @@ export interface MonetaryDonation {
   donorId: string
   donorName: string
   amount: number
-  method: "bkash" | "nagad"
+  method: "bkash" | "nagad" | "card" | "bank" | "sslcommerz" | "manual"
   phone: string
-  txHash: string
-  blockNumber: number
+  txHash?: string
+  blockNumber?: number
+  manualTransactionId?: string
+  sslTransactionId?: string
+  cardType?: string
+  cardBrand?: string
+  cardIssuer?: string
+  bankName?: string
+  email?: string
   timestamp: string
   status: PaymentStatus
+  verifiedAt?: string
+  adminNote?: string
 }
 
 export interface PhysicalDonation {

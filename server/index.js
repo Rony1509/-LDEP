@@ -9,6 +9,7 @@ import taskRoutes from "./routes/tasks.js";
 import feedbackRoutes from "./routes/feedback.js";
 import notificationRoutes from "./routes/notifications.js";
 import statsRoutes from "./routes/stats.js";
+import sslCommerzRoutes from "./routes/sslcommerz.js";
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -27,6 +28,7 @@ app.use("/api/tasks", taskRoutes);
 app.use("/api/feedback", feedbackRoutes);
 app.use("/api/notifications", notificationRoutes);
 app.use("/api/stats", statsRoutes);
+app.use("/api/sslcommerz", sslCommerzRoutes);
 
 // Health check
 app.get("/api/health", (_req, res) => {

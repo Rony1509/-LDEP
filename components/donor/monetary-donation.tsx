@@ -2,9 +2,8 @@
 
 import React from "react"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useAuth } from "@/lib/auth-context"
-import { store } from "@/lib/store"
 import { toast } from "sonner"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -19,86 +18,133 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog"
-import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp"
-import { Shield, CheckCircle, Link2 } from "lucide-react"
+import { Shield, CheckCircle, Link2, Loader2, Phone, Building2, Copy } from "lucide-react"
+import { paymentConfig } from "@/lib/payment-config"
 
-type Step = "form" | "otp" | "pin" | "processing" | "receipt"
+type Step = "form" | "instructions" | "submit" | "processing" | "success" | "failed"
+
+interface ReceiptData {
+  txHash: string
+  blockNumber: number
+  amount: number
+  timestamp: string
+  method: string
+  tranId: string
+  status: string
+}
 
 export function MonetaryDonation() {
   const { user } = useAuth()
   const [step, setStep] = useState<Step>("form")
-  const [method, setMethod] = useState<"bkash" | "nagad">("bkash")
+  const [method, setMethod] = useState<"bkash" | "nagad" | "bank">("bkash")
   const [amount, setAmount] = useState("")
   const [phone, setPhone] = useState("")
-  const [otp, setOtp] = useState("")
-  const [pin, setPin] = useState("")
-  const [receipt, setReceipt] = useState<{
-    txHash: string
-    blockNumber: number
-    amount: number
-    timestamp: string
-  } | null>(null)
+  const [email, setEmail] = useState("")
+  const [transactionId, setTransactionId] = useState("")
+  const [receipt, setReceipt] = useState<ReceiptData | null>(null)
+  const [error, setError] = useState<string | null>(null)
 
-  if (!user) return null
+  // Set email from user when available
+  useEffect(() => {
+    if (user) {
+      setEmail(user.email || "")
+    }
+  }, [user])
 
-  function handleSubmitForm(e: React.FormEvent) {
-    e.preventDefault()
+  if (!user) {
+    return null
+  }
+
+  const userEmail = user.email || ""
+  const userId = user.id
+  const userName = user.name
+
+  // Get current payment config
+  const currentConfig = method === "bank" ? paymentConfig.bank : method === "nagad" ? paymentConfig.nagad : paymentConfig.bkash
+
+  function handleMethodSelect(selectedMethod: "bkash" | "nagad" | "bank") {
+    setMethod(selectedMethod)
+  }
+
+  function handleProceedToPayment() {
     if (!amount || !phone) {
-      toast.error("Please fill in all fields.")
+      toast.error("Please fill in amount and phone number.")
       return
     }
-    setStep("otp")
-    toast.info("OTP sent to your phone number.")
+    if (Number(amount) < 10) {
+      toast.error("Minimum donation amount is ৳10")
+      return
+    }
+    setStep("instructions")
   }
 
-  function handleVerifyOtp() {
-    if (otp.length < 4) {
-      toast.error("Please enter the complete OTP.")
+  async function handleSubmitTransaction(e: React.FormEvent) {
+    e.preventDefault()
+    if (!transactionId || transactionId.length < 5) {
+      toast.error("Please enter a valid transaction ID")
       return
     }
-    setStep("pin")
-  }
 
-  function handleConfirmPin() {
-    if (pin.length < 4) {
-      toast.error("Please enter your PIN.")
-      return
-    }
     setStep("processing")
 
-    // Simulate blockchain processing then call API
-    setTimeout(async () => {
-      if (!user) return
-      try {
-        const donation = await store.createMonetaryDonation(
-          user.id,
-          user.name,
-          Number.parseFloat(amount),
+    try {
+      const response = await fetch("/api/donations/manual-submit", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          donorId: userId,
+          donorName: userName,
+          email: email || userEmail,
+          phone,
+          amount: Number.parseFloat(amount),
           method,
-          phone
-        )
-        setReceipt({
-          txHash: donation.txHash,
-          blockNumber: donation.blockNumber,
-          amount: donation.amount,
-          timestamp: donation.timestamp,
-        })
-        setStep("receipt")
-        toast.success("Donation recorded on the blockchain!")
-      } catch {
-        toast.error("Failed to process donation. Please try again.")
-        setStep("form")
+          transactionId,
+        }),
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to submit donation")
       }
-    }, 2000)
+
+      if (data.success && data.donation) {
+        setReceipt({
+          txHash: data.donation.txHash,
+          blockNumber: data.donation.blockNumber,
+          amount: data.donation.amount,
+          timestamp: data.donation.timestamp || new Date().toISOString(),
+          method: data.donation.method,
+          tranId: data.donation.transactionId,
+          status: data.donation.status,
+        })
+        setStep("success")
+        toast.success("Donation submitted! Waiting for admin verification.")
+      } else {
+        throw new Error(data.error || "Failed to submit donation")
+      }
+    } catch (err) {
+      console.error("Submission error:", err)
+      setError(err instanceof Error ? err.message : "Failed to submit donation")
+      setStep("failed")
+      toast.error("Failed to submit donation. Please try again.")
+    }
   }
 
   function handleReset() {
     setStep("form")
     setAmount("")
     setPhone("")
-    setOtp("")
-    setPin("")
+    setTransactionId("")
     setReceipt(null)
+    setError(null)
+  }
+
+  function copyToClipboard(text: string) {
+    navigator.clipboard.writeText(text)
+    toast.success("Copied to clipboard!")
   }
 
   return (
@@ -106,7 +152,7 @@ export function MonetaryDonation() {
       <div>
         <h1 className="text-2xl font-bold text-foreground">Make a Donation</h1>
         <p className="text-muted-foreground">
-          Donate securely via mobile financial services with blockchain verification
+          Send money manually and submit transaction ID for verification
         </p>
       </div>
 
@@ -120,61 +166,153 @@ export function MonetaryDonation() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <form onSubmit={handleSubmitForm} className="flex flex-col gap-5">
-              <div className="flex flex-col gap-3">
-                <Label>Payment Method</Label>
-                <RadioGroup
-                  value={method}
-                  onValueChange={(v) => setMethod(v as "bkash" | "nagad")}
-                  className="flex gap-4"
-                >
-                  <div className="flex items-center gap-2">
-                    <RadioGroupItem value="bkash" id="bkash" />
-                    <Label htmlFor="bkash" className="cursor-pointer font-medium">
-                      bKash
-                    </Label>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <RadioGroupItem value="nagad" id="nagad" />
-                    <Label htmlFor="nagad" className="cursor-pointer font-medium">
-                      Nagad
-                    </Label>
-                  </div>
-                </RadioGroup>
-              </div>
+            {step === "form" && (
+              <div className="flex flex-col gap-5">
+                <div className="flex flex-col gap-3">
+                  <Label>Payment Method</Label>
+                  <RadioGroup
+                    value={method}
+                    onValueChange={(v) => handleMethodSelect(v as "bkash" | "nagad" | "bank")}
+                    className="flex flex-col gap-2"
+                  >
+                    <div className="flex items-center gap-2">
+                      <RadioGroupItem value="bkash" id="bkash" />
+                      <Label htmlFor="bkash" className="cursor-pointer font-medium flex items-center gap-2">
+                        <Phone className="h-4 w-4" /> bKash
+                      </Label>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <RadioGroupItem value="nagad" id="nagad" />
+                      <Label htmlFor="nagad" className="cursor-pointer font-medium flex items-center gap-2">
+                        <Phone className="h-4 w-4" /> Nagad
+                      </Label>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <RadioGroupItem value="bank" id="bank" />
+                      <Label htmlFor="bank" className="cursor-pointer font-medium flex items-center gap-2">
+                        <Building2 className="h-4 w-4" /> Bank Transfer
+                      </Label>
+                    </div>
+                  </RadioGroup>
+                </div>
 
-              <div className="flex flex-col gap-2">
-                <Label htmlFor="donation-amount">Amount (BDT)</Label>
-                <Input
-                  id="donation-amount"
-                  type="number"
-                  placeholder="Enter amount"
-                  value={amount}
-                  onChange={(e) => setAmount(e.target.value)}
-                  min="1"
-                  required
-                  disabled={step !== "form"}
-                />
-              </div>
+                <div className="flex flex-col gap-2">
+                  <Label htmlFor="donation-amount">Amount (BDT)</Label>
+                  <Input
+                    id="donation-amount"
+                    type="number"
+                    placeholder="Enter amount"
+                    value={amount}
+                    onChange={(e) => setAmount(e.target.value)}
+                    min="10"
+                    required
+                  />
+                </div>
 
-              <div className="flex flex-col gap-2">
-                <Label htmlFor="donation-phone">Phone Number</Label>
-                <Input
-                  id="donation-phone"
-                  placeholder="+880-1XXX-XXXXXX"
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  required
-                  disabled={step !== "form"}
-                />
-              </div>
+                <div className="flex flex-col gap-2">
+                  <Label htmlFor="donation-phone">Your Phone Number</Label>
+                  <Input
+                    id="donation-phone"
+                    placeholder="+880-1XXX-XXXXXX"
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                    required
+                  />
+                </div>
 
-              {step === "form" && (
-                <Button type="submit" className="w-full">
+                <div className="flex flex-col gap-2">
+                  <Label htmlFor="donation-email">Email (Optional)</Label>
+                  <Input
+                    id="donation-email"
+                    type="email"
+                    placeholder="your@email.com"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                  />
+                </div>
+
+                <Button onClick={handleProceedToPayment} className="w-full">
                   Proceed to Payment
                 </Button>
-              )}
-            </form>
+              </div>
+            )}
+
+            {step === "instructions" && (
+              <div className="flex flex-col gap-4">
+                <div className="rounded-lg bg-primary/5 p-4 border border-primary/20">
+                  <h3 className="font-semibold mb-2">Send Money To:</h3>
+                  {method === "bank" ? (
+                    <div className="space-y-2 text-sm">
+                      <p><span className="text-muted-foreground">Bank:</span> <strong>{currentConfig.bankName}</strong></p>
+                      <p><span className="text-muted-foreground">Account:</span> <strong>{currentConfig.accountNumber}</strong></p>
+                      <p><span className="text-muted-foreground">Name:</span> <strong>{currentConfig.accountName}</strong></p>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      <span className="text-muted-foreground">Number:</span>
+                      <strong className="text-lg">{currentConfig.phoneNumber}</strong>
+                      <Button variant="ghost" size="sm" onClick={() => copyToClipboard(currentConfig.phoneNumber || "")}>
+                        <Copy className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  )}
+                </div>
+
+                <div className="rounded-lg bg-yellow-50 p-4 border border-yellow-200">
+                  <p className="font-medium text-yellow-800">Amount to send: <span className="text-2xl">৳{Number(amount).toLocaleString()}</span></p>
+                  <p className="text-sm text-yellow-700 mt-1">Send exactly this amount to avoid issues</p>
+                </div>
+
+                <p className="text-sm text-muted-foreground">{currentConfig.instructions}</p>
+
+                <form onSubmit={(e) => { e.preventDefault(); setStep("submit"); }} className="flex flex-col gap-4">
+                  <div className="flex flex-col gap-2">
+                    <Label htmlFor="transaction-id">Transaction ID</Label>
+                    <Input
+                      id="transaction-id"
+                      placeholder="Enter transaction ID from your app"
+                      value={transactionId}
+                      onChange={(e) => setTransactionId(e.target.value)}
+                      required
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Find this in your {method === "bank" ? "bank app" : `${method} app`} after sending money
+                    </p>
+                  </div>
+
+                  <div className="flex gap-2">
+                    <Button variant="outline" onClick={() => setStep("form")} className="flex-1">
+                      Back
+                    </Button>
+                    <Button type="submit" className="flex-1" disabled={transactionId.length < 5}>
+                      Submit
+                    </Button>
+                  </div>
+                </form>
+              </div>
+            )}
+
+            {step === "submit" && (
+              <div className="flex flex-col gap-4">
+                <div className="rounded-lg bg-green-50 p-4 border border-green-200">
+                  <h3 className="font-semibold text-green-800">Confirm Your Donation</h3>
+                  <div className="mt-2 space-y-1 text-sm">
+                    <p><span className="text-muted-foreground">Amount:</span> <strong>৳{Number(amount).toLocaleString()}</strong></p>
+                    <p><span className="text-muted-foreground">Method:</span> <strong>{currentConfig.displayName}</strong></p>
+                    <p><span className="text-muted-foreground">Transaction ID:</span> <strong className="font-mono">{transactionId}</strong></p>
+                  </div>
+                </div>
+
+                <div className="flex gap-2">
+                  <Button variant="outline" onClick={() => setStep("instructions")} className="flex-1">
+                    Back
+                  </Button>
+                  <Button onClick={handleSubmitTransaction} className="flex-1">
+                    Confirm & Submit
+                  </Button>
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
 
@@ -183,21 +321,21 @@ export function MonetaryDonation() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Shield className="h-5 w-5 text-primary" />
-              Blockchain Security
+              How It Works
             </CardTitle>
             <CardDescription>
-              Your donation is protected by blockchain technology
+              Manual payment verification process
             </CardDescription>
           </CardHeader>
           <CardContent>
             <div className="flex flex-col gap-4">
               {[
-                { step: "1", label: "Enter payment details" },
-                { step: "2", label: "Verify with OTP" },
-                { step: "3", label: "Confirm with PIN" },
-                { step: "4", label: "Smart contract executes" },
-                { step: "5", label: "Transaction recorded on blockchain" },
-                { step: "6", label: "Receipt generated automatically" },
+                { step: "1", label: "Choose payment method (bKash/Nagad/Bank)" },
+                { step: "2", label: "Send money to admin's account" },
+                { step: "3", label: "Copy transaction ID from your app" },
+                { step: "4", label: "Submit transaction ID on this page" },
+                { step: "5", label: "Admin verifies manually" },
+                { step: "6", label: "Donation recorded on blockchain" },
               ].map((s) => (
                 <div key={s.step} className="flex items-center gap-3">
                   <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-bold text-primary">
@@ -211,85 +349,56 @@ export function MonetaryDonation() {
         </Card>
       </div>
 
-      {/* OTP Dialog */}
-      <Dialog open={step === "otp"} onOpenChange={() => {}}>
-        <DialogContent className="sm:max-w-sm">
-          <DialogHeader>
-            <DialogTitle>Enter OTP</DialogTitle>
-            <DialogDescription>
-              A verification code has been sent to {phone}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="flex flex-col items-center gap-4">
-            <InputOTP maxLength={6} value={otp} onChange={setOtp}>
-              <InputOTPGroup>
-                <InputOTPSlot index={0} />
-                <InputOTPSlot index={1} />
-                <InputOTPSlot index={2} />
-                <InputOTPSlot index={3} />
-                <InputOTPSlot index={4} />
-                <InputOTPSlot index={5} />
-              </InputOTPGroup>
-            </InputOTP>
-            <p className="text-xs text-muted-foreground">
-              Demo: Enter any 6 digits
-            </p>
-            <Button onClick={handleVerifyOtp} className="w-full">
-              Verify OTP
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* PIN Dialog */}
-      <Dialog open={step === "pin"} onOpenChange={() => {}}>
-        <DialogContent className="sm:max-w-sm">
-          <DialogHeader>
-            <DialogTitle>Enter PIN</DialogTitle>
-            <DialogDescription>
-              {"Enter your "}{method === "bkash" ? "bKash" : "Nagad"}{" PIN to confirm payment of ৳"}{Number.parseFloat(amount || "0").toLocaleString()}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="flex flex-col items-center gap-4">
-            <InputOTP maxLength={4} value={pin} onChange={setPin}>
-              <InputOTPGroup>
-                <InputOTPSlot index={0} />
-                <InputOTPSlot index={1} />
-                <InputOTPSlot index={2} />
-                <InputOTPSlot index={3} />
-              </InputOTPGroup>
-            </InputOTP>
-            <p className="text-xs text-muted-foreground">
-              Demo: Enter any 4 digits
-            </p>
-            <Button onClick={handleConfirmPin} className="w-full">
-              Confirm Payment
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
-
       {/* Processing Dialog */}
-      <Dialog open={step === "processing"} onOpenChange={() => {}}>
+      <Dialog open={step === "processing"}>
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
-            <DialogTitle className="sr-only">Processing Payment</DialogTitle>
-            <DialogDescription className="sr-only">
-              Your transaction is being processed on the blockchain
+            <DialogTitle className="flex items-center gap-2">
+              <Loader2 className="h-5 w-5 animate-spin" />
+              Submitting Donation
+            </DialogTitle>
+            <DialogDescription>
+              Please wait while we process your submission
             </DialogDescription>
           </DialogHeader>
           <div className="flex flex-col items-center gap-4 py-8">
             <div className="h-10 w-10 animate-spin rounded-full border-4 border-primary border-t-transparent" />
-            <p className="font-medium text-foreground">Processing on Blockchain</p>
+            <p className="font-medium text-foreground">Recording on Blockchain</p>
             <p className="text-sm text-muted-foreground">
-              Smart contract executing... validating transaction...
+              Do not close this window...
             </p>
           </div>
         </DialogContent>
       </Dialog>
 
-      {/* Receipt Dialog */}
-      <Dialog open={step === "receipt"} onOpenChange={(open) => {
+      {/* Failed Dialog */}
+      <Dialog open={step === "failed"} onOpenChange={(open) => {
+        if (!open) {
+          handleReset()
+        }
+      }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-destructive">
+              Submission Failed
+            </DialogTitle>
+            <DialogDescription>
+              {error || "There was an issue submitting your donation"}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col gap-4">
+            <p className="text-sm text-muted-foreground">
+              Please try again or contact support.
+            </p>
+            <Button onClick={handleReset} className="w-full">
+              Try Again
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Success Dialog */}
+      <Dialog open={step === "success"} onOpenChange={(open) => {
         if (!open) {
           handleReset()
         }
@@ -297,11 +406,11 @@ export function MonetaryDonation() {
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <CheckCircle className="h-5 w-5 text-success" />
-              Donation Successful
+              <CheckCircle className="h-5 w-5 text-yellow-600" />
+              Donation Submitted
             </DialogTitle>
             <DialogDescription>
-              Your transaction has been recorded on the blockchain
+              Your donation is pending verification by admin
             </DialogDescription>
           </DialogHeader>
           {receipt && (
@@ -317,7 +426,17 @@ export function MonetaryDonation() {
                   <div className="flex justify-between">
                     <span className="text-sm text-muted-foreground">Method</span>
                     <Badge variant="secondary">
-                      {method === "bkash" ? "bKash" : "Nagad"}
+                      {receipt.method}
+                    </Badge>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-sm text-muted-foreground">Transaction ID</span>
+                    <span className="font-mono text-sm">{receipt.tranId}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-sm text-muted-foreground">Status</span>
+                    <Badge variant="outline" className="bg-yellow-50 text-yellow-700">
+                      Pending Verification
                     </Badge>
                   </div>
                   <div className="flex justify-between">
@@ -330,19 +449,12 @@ export function MonetaryDonation() {
                       {receipt.txHash}
                     </span>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-sm text-muted-foreground">Timestamp</span>
-                    <span className="text-sm">
-                      {new Date(receipt.timestamp).toLocaleString()}
-                    </span>
-                  </div>
                 </div>
               </div>
-              <div className="flex items-center gap-2 rounded-lg bg-primary/5 p-3">
-                <Link2 className="h-4 w-4 text-primary" />
-                <span className="text-xs text-muted-foreground">
-                  This transaction is permanently recorded on the blockchain
-                </span>
+              <div className="rounded-lg bg-yellow-50 p-3 border border-yellow-200">
+                <p className="text-sm text-yellow-800">
+                  ⏳ Your donation is waiting for admin verification. You will be notified once approved.
+                </p>
               </div>
               <Button onClick={handleReset} className="w-full">
                 Make Another Donation
@@ -354,3 +466,4 @@ export function MonetaryDonation() {
     </div>
   )
 }
+

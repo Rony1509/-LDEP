@@ -3,6 +3,7 @@ import connectDB from "@/lib/mongodb";
 import PhysicalDonation from "@/server/models/PhysicalDonation";
 import Notification from "@/server/models/Notification";
 import User from "@/server/models/User";
+import { getAreaCoordinates } from "@/lib/areaCoordinates";
 
 export async function GET() {
   try {
@@ -15,10 +16,22 @@ export async function GET() {
         donorName: d.donorName,
         type: d.type,
         quantity: d.quantity,
+        condition: d.condition,
+        foodType: d.foodType,
+        expiryDate: d.expiryDate ? d.expiryDate.toISOString() : null,
         location: d.location,
+        preferredDate: d.preferredDate ? d.preferredDate.toISOString() : null,
+        timeSlot: d.timeSlot,
+        phone: d.phone,
+        email: d.email,
         photoUrl: d.photoUrl,
         description: d.description,
+        specialInstructions: d.specialInstructions,
         status: d.status,
+        latitude: d.latitude,
+        longitude: d.longitude,
+        blockNumber: d.blockNumber ?? null,
+        txHash: d.txHash ?? null,
         createdAt: d.createdAt.toISOString(),
       }))
     );
@@ -31,18 +44,47 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     await connectDB();
-    const { donorId, donorName, type, quantity, location, description, photoUrl } =
-      await request.json();
+    const {
+      donorId,
+      donorName,
+      type,
+      quantity,
+      condition,
+      foodType,
+      expiryDate,
+      location,
+      preferredDate,
+      timeSlot,
+      phone,
+      email,
+      description,
+      photoUrl,
+      specialInstructions,
+    } = await request.json();
+
+    const areaCoords = getAreaCoordinates(location);
+    const latitude = areaCoords?.latitude || null;
+    const longitude = areaCoords?.longitude || null;
 
     const donation = await PhysicalDonation.create({
       donorId,
       donorName,
       type,
       quantity,
+      condition: condition || "",
+      foodType: foodType || "",
+      expiryDate: expiryDate || null,
       location,
+      preferredDate: preferredDate || null,
+      timeSlot: timeSlot || "",
+      phone: phone || "",
+      email: email || "",
       description,
       photoUrl: photoUrl || "",
+      specialInstructions: specialInstructions || "",
       status: "pending",
+      latitude,
+      longitude,
     });
 
     const admin = await User.findOne({ role: "admin" });
@@ -60,10 +102,20 @@ export async function POST(request: Request) {
         donorName: donation.donorName,
         type: donation.type,
         quantity: donation.quantity,
+        condition: donation.condition,
+        foodType: donation.foodType,
+        expiryDate: donation.expiryDate ? donation.expiryDate.toISOString() : null,
         location: donation.location,
+        preferredDate: donation.preferredDate ? donation.preferredDate.toISOString() : null,
+        timeSlot: donation.timeSlot,
+        phone: donation.phone,
+        email: donation.email,
         photoUrl: donation.photoUrl,
         description: donation.description,
+        specialInstructions: donation.specialInstructions,
         status: donation.status,
+        latitude: donation.latitude,
+        longitude: donation.longitude,
         createdAt: donation.createdAt.toISOString(),
       },
       { status: 201 }

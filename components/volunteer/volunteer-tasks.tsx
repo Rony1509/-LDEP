@@ -15,18 +15,17 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog"
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import {
-  MapPin,
-  Calendar,
-  User,
-  Package,
-  Play,
-  CheckCircle,
-  Upload,
-  Clock,
-} from "lucide-react"
+import { Play, CheckCircle, Upload, Clock, Image } from "lucide-react"
 import type { Task, TaskStatus } from "@/lib/types"
 
 const statusColor: Record<TaskStatus, string> = {
@@ -40,7 +39,8 @@ export function VolunteerTasks() {
   const [tasks, setTasks] = useState<Task[]>([])
   const [completeDialogOpen, setCompleteDialogOpen] = useState(false)
   const [selectedTask, setSelectedTask] = useState<Task | null>(null)
-  const [proofUrl, setProofUrl] = useState("")
+  const [proofFile, setProofFile] = useState<File | null>(null)
+  const [proofPreview, setProofPreview] = useState<string>("")
 
   const loadTasks = useCallback(async () => {
     if (!user) return
@@ -66,87 +66,130 @@ export function VolunteerTasks() {
 
   function openCompleteDialog(task: Task) {
     setSelectedTask(task)
-    setProofUrl("")
+    setProofFile(null)
+    setProofPreview("")
     setCompleteDialogOpen(true)
+  }
+
+  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setProofFile(file)
+    const reader = new FileReader()
+    reader.onload = () => setProofPreview(reader.result as string)
+    reader.readAsDataURL(file)
   }
 
   async function handleComplete() {
     if (!selectedTask) return
-    await store.updateTaskStatus(selectedTask.id, "completed", proofUrl || "proof-uploaded")
+    if (!proofPreview) {
+  toast.error("Please wait for photo to load")
+  return
+}
+const proofUrl = proofPreview
+    await store.updateTaskStatus(selectedTask.id, "completed", proofUrl)
     toast.success("Task completed successfully!")
     setCompleteDialogOpen(false)
     setSelectedTask(null)
     loadTasks()
   }
 
-  function TaskCard({ task }: { task: Task }) {
+  function TaskTable({ taskList }: { taskList: Task[] }) {
+    if (taskList.length === 0) {
+      return (
+        <Card>
+          <CardContent className="py-12">
+            <p className="text-center text-muted-foreground">No tasks found.</p>
+          </CardContent>
+        </Card>
+      )
+    }
+
     return (
-      <Card>
-        <CardContent className="pt-6">
-          <div className="flex flex-col gap-4">
-            <div className="flex items-start justify-between">
-              <div className="flex flex-col gap-1">
-                <h3 className="font-semibold text-card-foreground">
-                  {task.donationType} Pickup
-                </h3>
-                <Badge className={`w-fit ${statusColor[task.status]}`}>
-                  {task.status === "in-progress"
-                    ? "In Progress"
-                    : task.status.charAt(0).toUpperCase() + task.status.slice(1)}
-                </Badge>
-              </div>
-            </div>
+      <div className="overflow-x-auto rounded-lg border border-border">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Donor Name</TableHead>
+              <TableHead>Phone</TableHead>
+              <TableHead>Item</TableHead>
+              <TableHead>Pickup Location</TableHead>
+              
+              <TableHead>Status</TableHead>
+              <TableHead>Action</TableHead>
+              <TableHead>Proof Photo</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {taskList.map((t) => (
+              <TableRow key={t.id}>
+                <TableCell className="font-medium">{t.donorName}</TableCell>
+                <TableCell>{t.donorPhone || "—"}</TableCell>
+                <TableCell>{t.donationType}</TableCell>
+                <TableCell>{t.location}</TableCell>
+                
+                <TableCell>
+                  <Badge className={statusColor[t.status]}>
+                    {t.status === "in-progress"
+                      ? "In Progress"
+                      : t.status.charAt(0).toUpperCase() + t.status.slice(1)}
+                  </Badge>
+                </TableCell>
+                <TableCell>
+                  {t.status === "pending" && (
+                    <Button size="sm" onClick={() => handleStartTask(t.id)}>
+                      <Play className="mr-1 h-3 w-3" />
+                      Start
+                    </Button>
+                  )}
+                  {t.status === "in-progress" && (
+                    <Button size="sm" onClick={() => openCompleteDialog(t)}>
+                      <Upload className="mr-1 h-3 w-3" />
+                      Upload Proof
+                    </Button>
+                  )}
+                  {t.status === "completed" && (
+                    <span className="flex items-center gap-1 text-sm text-success">
+                      <CheckCircle className="h-3 w-3" />
+                      Done
+                    </span>
+                  )}
+                </TableCell>
+                <TableCell>
+  {t.pickupPhotoUrl || t.proofPhotoUrl ? (
+    <button
+      className="text-sm text-primary underline hover:opacity-80"
+      onClick={() => {
+        const url = t.pickupPhotoUrl || t.proofPhotoUrl;
+        if (!url) return;
 
-            <div className="flex flex-col gap-2 text-sm">
-              <div className="flex items-center gap-2 text-muted-foreground">
-                <User className="h-4 w-4 shrink-0" />
-                <span>Donor: {task.donorName}</span>
-              </div>
-              <div className="flex items-center gap-2 text-muted-foreground">
-                <MapPin className="h-4 w-4 shrink-0" />
-                <span>{task.location}</span>
-              </div>
-              <div className="flex items-center gap-2 text-muted-foreground">
-                <Package className="h-4 w-4 shrink-0" />
-                <span>Type: {task.donationType}</span>
-              </div>
-              <div className="flex items-center gap-2 text-muted-foreground">
-                <Calendar className="h-4 w-4 shrink-0" />
-                <span>Deadline: {new Date(task.deadline).toLocaleDateString()}</span>
-              </div>
-            </div>
-
-            <div className="flex gap-2">
-              {task.status === "pending" && (
-                <Button
-                  size="sm"
-                  className="w-full"
-                  onClick={() => handleStartTask(task.id)}
-                >
-                  <Play className="mr-1 h-4 w-4" />
-                  Start Task
-                </Button>
-              )}
-              {task.status === "in-progress" && (
-                <Button
-                  size="sm"
-                  className="w-full"
-                  onClick={() => openCompleteDialog(task)}
-                >
-                  <CheckCircle className="mr-1 h-4 w-4" />
-                  Mark Complete
-                </Button>
-              )}
-              {task.status === "completed" && task.proofPhotoUrl && (
-                <div className="flex items-center gap-1 text-sm text-success">
-                  <CheckCircle className="h-4 w-4" />
-                  Proof uploaded
-                </div>
-              )}
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+        if (url.startsWith("data:")) {
+          const [header, data] = url.split(",");
+          const mime = header.match(/:(.*?);/)?.[1] || "image/jpeg";
+          const byteChars = atob(data);
+          const byteArr = new Uint8Array(byteChars.length);
+          for (let i = 0; i < byteChars.length; i++) {
+            byteArr[i] = byteChars.charCodeAt(i);
+          }
+          const blob = new Blob([byteArr], { type: mime });
+          const blobUrl = URL.createObjectURL(blob);
+          window.open(blobUrl, "_blank");
+        } else {
+          window.open(url, "_blank");
+        }
+      }}
+    >
+      View
+    </button>
+  ) : (
+    <span className="text-sm text-muted-foreground">—</span>
+  )}
+</TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
     )
   }
 
@@ -177,73 +220,16 @@ export function VolunteerTasks() {
         </TabsList>
 
         <TabsContent value="all">
-          {tasks.length === 0 ? (
-            <Card>
-              <CardContent className="py-12">
-                <p className="text-center text-muted-foreground">
-                  No tasks assigned yet.
-                </p>
-              </CardContent>
-            </Card>
-          ) : (
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {tasks.map((t) => (
-                <TaskCard key={t.id} task={t} />
-              ))}
-            </div>
-          )}
+          <TaskTable taskList={tasks} />
         </TabsContent>
-
         <TabsContent value="pending">
-          {pending.length === 0 ? (
-            <Card>
-              <CardContent className="py-12">
-                <p className="text-center text-muted-foreground">No pending tasks.</p>
-              </CardContent>
-            </Card>
-          ) : (
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {pending.map((t) => (
-                <TaskCard key={t.id} task={t} />
-              ))}
-            </div>
-          )}
+          <TaskTable taskList={pending} />
         </TabsContent>
-
         <TabsContent value="in-progress">
-          {inProgress.length === 0 ? (
-            <Card>
-              <CardContent className="py-12">
-                <p className="text-center text-muted-foreground">
-                  No tasks in progress.
-                </p>
-              </CardContent>
-            </Card>
-          ) : (
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {inProgress.map((t) => (
-                <TaskCard key={t.id} task={t} />
-              ))}
-            </div>
-          )}
+          <TaskTable taskList={inProgress} />
         </TabsContent>
-
         <TabsContent value="completed">
-          {completed.length === 0 ? (
-            <Card>
-              <CardContent className="py-12">
-                <p className="text-center text-muted-foreground">
-                  No completed tasks yet.
-                </p>
-              </CardContent>
-            </Card>
-          ) : (
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {completed.map((t) => (
-                <TaskCard key={t.id} task={t} />
-              ))}
-            </div>
-          )}
+          <TaskTable taskList={completed} />
         </TabsContent>
       </Tabs>
 
@@ -253,37 +239,49 @@ export function VolunteerTasks() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Upload className="h-5 w-5 text-primary" />
-              Complete Task
+              Upload Proof Photo
             </DialogTitle>
             <DialogDescription>
-              Upload proof of collection to mark this task as complete
+              ছবি তুলে upload করুন। Upload হলে task automatically completed হবে।
             </DialogDescription>
           </DialogHeader>
           {selectedTask && (
             <div className="flex flex-col gap-4">
               <div className="rounded-lg border border-border bg-muted/50 p-3">
                 <p className="font-medium text-foreground">
-                  {selectedTask.donationType} from {selectedTask.donorName}
+                  {selectedTask.donationType} — {selectedTask.donorName}
                 </p>
-                <p className="text-sm text-muted-foreground">
-                  {selectedTask.location}
-                </p>
+                <p className="text-sm text-muted-foreground">{selectedTask.location}</p>
               </div>
+
               <div className="flex flex-col gap-2">
-                <Label htmlFor="proof-url">Proof Photo URL (optional)</Label>
+                <Label htmlFor="proof-file">Proof Photo</Label>
                 <Input
-                  id="proof-url"
-                  placeholder="https://example.com/photo.jpg"
-                  value={proofUrl}
-                  onChange={(e) => setProofUrl(e.target.value)}
+                  id="proof-file"
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  onChange={handleFileChange}
                 />
                 <p className="text-xs text-muted-foreground">
-                  Enter a URL to your proof photo, or leave blank to confirm without a photo
+                  Mobile থেকে সরাসরি camera দিয়ে তুলতে পারবেন
                 </p>
               </div>
-              <Button onClick={handleComplete}>
+
+              {proofPreview && (
+                <div className="flex flex-col gap-1">
+                  <p className="text-xs text-muted-foreground">Preview:</p>
+                  <img
+                    src={proofPreview}
+                    alt="Proof preview"
+                    className="max-h-48 rounded-lg object-contain border border-border"
+                  />
+                </div>
+              )}
+
+              <Button onClick={handleComplete} disabled={!proofFile}>
                 <CheckCircle className="mr-2 h-4 w-4" />
-                Confirm Completion
+                Confirm & Complete Task
               </Button>
             </div>
           )}

@@ -4,17 +4,24 @@ import PhysicalDonation from "@/server/models/PhysicalDonation";
 import Notification from "@/server/models/Notification";
 
 export async function PUT(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ id: string }> }
-) {
+)
+
+{
   try {
     await connectDB();
+
     const { id } = await params;
+    const body = await request.json().catch(() => ({}))
+    const rejectReason = body.rejectReason || ""
+
     const donation = await PhysicalDonation.findByIdAndUpdate(
       id,
-      { status: "rejected" },
+      { status: "rejected", rejectReason },
       { new: true }
     );
+
     if (!donation)
       return NextResponse.json(
         { error: "Donation not found" },
@@ -36,6 +43,9 @@ export async function PUT(
       photoUrl: donation.photoUrl,
       description: donation.description,
       status: donation.status,
+      rejectReason: donation.rejectReason,
+      blockNumber: null,
+      txHash: null,
       createdAt: donation.createdAt.toISOString(),
     });
   } catch (err: unknown) {

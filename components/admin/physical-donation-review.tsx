@@ -69,29 +69,45 @@ export function PhysicalDonationReview() {
             <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
+
                   <TableRow>
                     <TableHead>Donor</TableHead>
                     <TableHead>Type</TableHead>
-                    <TableHead>Quantity</TableHead>
+                    <TableHead>Qty</TableHead>
                     <TableHead>Location</TableHead>
+                    <TableHead>Phone</TableHead>
+                    <TableHead>Preferred Date</TableHead>
                     <TableHead>Description</TableHead>
-                    <TableHead>Date</TableHead>
+                    <TableHead>Block No.</TableHead>
+                    <TableHead>TxHash</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
+
                 </TableHeader>
                 <TableBody>
                   {donations.map((d) => (
-                    <TableRow key={d.id}>
+
+
+                   <TableRow key={d.id}>
                       <TableCell className="font-medium">{d.donorName}</TableCell>
                       <TableCell>{d.type}</TableCell>
                       <TableCell>{d.quantity}</TableCell>
                       <TableCell>{d.location}</TableCell>
-                      <TableCell className="max-w-[200px] truncate">
+                      <TableCell>{d.phone || "—"}</TableCell>
+                      <TableCell>
+                        {d.preferredDate
+                          ? new Date(d.preferredDate).toLocaleDateString()
+                          : "—"}
+                      </TableCell>
+                      <TableCell className="max-w-[150px] truncate">
                         {d.description}
                       </TableCell>
                       <TableCell>
-                        {new Date(d.createdAt).toLocaleDateString()}
+                        {d.blockNumber ?? <span className="text-muted-foreground">NULL</span>}
+                      </TableCell>
+                      <TableCell className="max-w-[100px] truncate font-mono text-xs">
+                        {d.txHash ?? <span className="text-muted-foreground">NULL</span>}
                       </TableCell>
                       <TableCell>
                         <Badge className={statusColor[d.status]}>
@@ -113,6 +129,9 @@ export function PhysicalDonationReview() {
                         )}
                       </TableCell>
                     </TableRow>
+                  
+
+
                   ))}
                 </TableBody>
               </Table>

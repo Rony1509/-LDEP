@@ -13,6 +13,23 @@ import {
   UserCheck,
   AlertCircle,
 } from "lucide-react"
+import {
+  LineChart,
+  Line,
+  PieChart,
+  Pie,
+  Cell,
+  BarChart,
+  Bar,
+  AreaChart,
+  Area,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  Legend,
+} from "recharts"
 
 interface Stats {
   totalDonors: number
@@ -25,6 +42,25 @@ interface Stats {
   completedTasks: number
   pendingTasks: number
 }
+
+interface ChartData {
+  month: string
+  monetary: number
+  physical: number
+  donors: number
+}
+
+interface CategoryData {
+  name: string
+  value: number
+}
+
+interface VolunteerPerformance {
+  name: string
+  tasks: number
+}
+
+const COLORS = ["#0088FE", "#00C49F", "#FFBB28", "#FF8042", "#8884d8", "#82ca9d"]
 
 export function AdminOverview() {
   const [stats, setStats] = useState<Stats>({
@@ -39,13 +75,62 @@ export function AdminOverview() {
     pendingTasks: 0,
   })
 
+  const [donationTrends, setDonationTrends] = useState<ChartData[]>([])
+  const [donationTypes, setDonationTypes] = useState<CategoryData[]>([])
+  const [categoryData, setCategoryData] = useState<CategoryData[]>([])
+  const [volunteerPerformance, setVolunteerPerformance] = useState<VolunteerPerformance[]>([])
+  const [loading, setLoading] = useState(true)
+
   useEffect(() => {
-    store.getStats().then(setStats)
+    loadData()
     const interval = setInterval(() => {
-      store.getStats().then(setStats)
-    }, 5000)
+      if (!document.hidden) loadData()
+    }, 30000)
+    
     return () => clearInterval(interval)
   }, [])
+
+  async function loadData() {
+    setLoading(true)
+    try {
+      const [statsData, chartData] = await Promise.all([
+        store.getStats(),
+        store.getChartStats()
+      ])
+      setStats(statsData)
+
+      // Use real chart data from API
+      if (chartData.trends && chartData.trends.length > 0) {
+        setDonationTrends(chartData.trends)
+      }
+      
+      if (chartData.donationTypes && chartData.donationTypes.length > 0) {
+        setDonationTypes(chartData.donationTypes)
+      }
+      
+      if (chartData.categories && chartData.categories.length > 0) {
+        setCategoryData(chartData.categories)
+      } else {
+        // Fallback to default categories if no data
+        setCategoryData([
+          { name: "Food", value: 0 },
+          { name: "Clothes", value: 0 },
+          { name: "Books", value: 0 },
+          { name: "Medicine", value: 0 },
+          { name: "Electronics", value: 0 },
+          { name: "Others", value: 0 }
+        ])
+      }
+      
+      if (chartData.volunteerPerformance && chartData.volunteerPerformance.length > 0) {
+        setVolunteerPerformance(chartData.volunteerPerformance)
+      }
+    } catch (error) {
+      console.error("Failed to load chart data:", error)
+    } finally {
+      setLoading(false)
+    }
+  }
 
   const cards = [
     {
@@ -114,6 +199,8 @@ export function AdminOverview() {
           Overview of platform activity and key metrics
         </p>
       </div>
+
+      {/* Stats Cards */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {cards.map((card) => (
           <Card key={card.title}>
@@ -130,6 +217,173 @@ export function AdminOverview() {
             </CardContent>
           </Card>
         ))}
+      </div>
+
+      {/* Charts Section */}
+      <div className="grid gap-6 lg:grid-cols-2">
+        {/* 1. Donation Trends - Line Chart */}
+        <Card className="lg:col-span-2">
+          <CardHeader>
+            <CardTitle>Donation Trends (Monthly)</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="h-72">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={donationTrends}>
+                  <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                  <XAxis dataKey="month" className="text-xs" />
+                  <YAxis className="text-xs" />
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: "hsl(var(--card))",
+                      border: "1px solid hsl(var(--border))",
+                      borderRadius: "8px",
+                    }}
+                  />
+                  <Legend />
+                  <Line
+                    type="monotone"
+                    dataKey="monetary"
+                    stroke="#0088FE"
+                    strokeWidth={2}
+                    name="Monetary (৳)"
+                    dot={{ fill: "#0088FE" }}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="physical"
+                    stroke="#00C49F"
+                    strokeWidth={2}
+                    name="Physical Items"
+                    dot={{ fill: "#00C49F" }}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* 2. Donation Type Breakdown - Donut Chart */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Donation Type Breakdown</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="h-72">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={donationTypes}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={60}
+                    outerRadius={100}
+                    paddingAngle={5}
+                    dataKey="value"
+                    label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                  >
+                    {donationTypes.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                    ))}
+                  </Pie>
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: "hsl(var(--card))",
+                      border: "1px solid hsl(var(--border))",
+                      borderRadius: "8px",
+                    }}
+                    formatter={(value: number) => `৳${value.toLocaleString()}`}
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* 3. Category-wise Physical Donations - Bar Chart */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Category-wise Physical Donations</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="h-72">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={categoryData} layout="vertical">
+                  <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                  <XAxis type="number" className="text-xs" />
+                  <YAxis dataKey="name" type="category" width={80} className="text-xs" />
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: "hsl(var(--card))",
+                      border: "1px solid hsl(var(--border))",
+                      borderRadius: "8px",
+                    }}
+                  />
+                  <Bar dataKey="value" fill="#0088FE" radius={[0, 4, 4, 0]} name="Items" />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* 4. Volunteer Performance - Bar Chart */}
+        <Card className="lg:col-span-2">
+          <CardHeader>
+            <CardTitle>Volunteer Performance</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="h-72">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={volunteerPerformance}>
+                  <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                  <XAxis dataKey="name" className="text-xs" />
+                  <YAxis className="text-xs" />
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: "hsl(var(--card))",
+                      border: "1px solid hsl(var(--border))",
+                      borderRadius: "8px",
+                    }}
+                  />
+                  <Bar dataKey="tasks" fill="#00C49F" radius={[4, 4, 0, 0]} name="Completed Tasks" />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* 5. Monthly Active Users - Area Chart */}
+        <Card className="lg:col-span-2">
+          <CardHeader>
+            <CardTitle>Monthly Active Users</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="h-72">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={donationTrends}>
+                  <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                  <XAxis dataKey="month" className="text-xs" />
+                  <YAxis className="text-xs" />
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: "hsl(var(--card))",
+                      border: "1px solid hsl(var(--border))",
+                      borderRadius: "8px",
+                    }}
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="donors"
+                    stroke="#FFBB28"
+                    fill="#FFBB28"
+                    fillOpacity={0.3}
+                    name="Active Donors"
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          </CardContent>
+        </Card>
       </div>
     </div>
   )

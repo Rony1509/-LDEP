@@ -13,6 +13,7 @@ export interface User {
   role: UserRole
   password: string
   address?: string
+  serviceArea?: string
   qualifications?: string
   bio?: string
   profilePicture?: string
@@ -48,9 +49,20 @@ export interface PhysicalDonation {
   donorName: string
   type: string
   quantity: number
+  condition: string
+  foodType: string
+  expiryDate: string | null
   location: string
+  preferredDate: string | null
+  timeSlot: string
+  phone: string
+  email: string
   photoUrl: string
   description: string
+  specialInstructions: string
+  rejectReason: string
+blockNumber: string | null
+txHash: string | null
   status: DonationStatus
   createdAt: string
 }
@@ -66,8 +78,23 @@ export interface Task {
   deadline: string
   status: TaskStatus
   proofPhotoUrl?: string
+  donorLatitude?: number | null
+  donorLongitude?: number | null
+  deliveryLatitude?: number | null
+  deliveryLongitude?: number | null
+  volunteerLatitude?: number | null
+  volunteerLongitude?: number | null
+  pickupPhotoUrl?: string
+  deliveryPhotoUrl?: string
+      // ← add
   assignedAt: string
+  
   completedAt?: string
+  startedAt?: string
+  donorPhone?: string        // ← add
+  distance?: string          // ← add
+  estimatedTime?: string 
+
 }
 
 export interface Feedback {

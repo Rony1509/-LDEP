@@ -9,8 +9,10 @@ import { pendingTransactionsStore } from "@/lib/pending-transactions";
 // Handle GET request - SSL Commerz redirects here after payment
 export async function GET(request: NextRequest) {
   try {
+    await connectDB();
     const { searchParams } = new URL(request.url);
     const tran_id = searchParams.get("tran_id");
+    const bank_tran_id = searchParams.get("bank_tran_id");
     const status = searchParams.get("status");
     const isDemo = searchParams.get("demo") === "true";
 
@@ -28,17 +30,111 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // For demo mode, redirect to frontend with success params
-    if (isDemo) {
+    // Get pending transaction data
+    const pendingData = pendingTransactionsStore.get(tran_id);
+
+    if (!pendingData) {
       return NextResponse.redirect(
-        new URL(`/?payment=success&tran_id=${tran_id}&demo=true`, request.url)
+        new URL(`/?payment=error&message=Transaction not found`, request.url)
       );
     }
 
-    // Redirect to frontend to handle the actual payment processing
-    return NextResponse.redirect(
-      new URL(`/?payment=success&tran_id=${tran_id}`, request.url)
-    );
+    // Get next unique block number from MongoDB
+const lastDonation = await MonetaryDonation.findOne({ blockNumber: { $exists: true } })
+  .sort({ blockNumber: -1 })
+  .select("blockNumber");
+const nextBlockNumber = (lastDonation?.blockNumber || 0) + 1;
+    // Process the payment and save to database
+    try {
+      // Step 1: Record on blockchain
+      const block = donationBlockchain.addBlock({
+        type: "monetary_donation",
+        donorId: pendingData.donorId,
+        donorName: pendingData.donorName,
+        amount: pendingData.amount,
+        method: pendingData.method,
+        phone: pendingData.phone,
+        email: pendingData.email,
+        sslTransactionId: tran_id,
+        timestamp: new Date().toISOString(),
+      });
+
+      // Check if donation already exists
+const existingDonation = await MonetaryDonation.findOne({ 
+  sslTransactionId: tran_id 
+});
+
+if (existingDonation) {
+  const encodedDonation = Buffer.from(JSON.stringify({
+    id: existingDonation._id.toString(),
+    amount: existingDonation.amount,
+    txHash: existingDonation.txHash,
+    blockNumber: existingDonation.blockNumber,
+    tranId: tran_id,
+    status: existingDonation.status,
+  })).toString("base64");
+
+  return NextResponse.redirect(
+    new URL(`/payment/success?data=${encodedDonation}`, request.url)
+  );
+}
+
+      // Step 2: Save to MongoDB
+      const donation = await MonetaryDonation.create({
+        donorId: pendingData.donorId,
+        donorName: pendingData.donorName,
+        email: pendingData.email,
+        amount: pendingData.amount,
+        method: "sslcommerz",
+        phone: pendingData.phone,
+        txHash: `0x${block.hash}`,
+        blockNumber: nextBlockNumber,
+        sslTransactionId: tran_id,
+        status: "completed",
+      });
+
+      // Step 3: Clean up pending transaction
+      pendingTransactionsStore.delete(tran_id);
+
+      // Step 4: Create notifications
+      try {
+        const admin = await User.findOne({ role: "admin" });
+        if (admin) {
+          await Notification.create({
+            userId: admin._id,
+            message: `New donation of ৳${pendingData.amount} from ${pendingData.donorName} via SSLCommerz`,
+          });
+        }
+
+        if (pendingData.donorId) {
+          await Notification.create({
+            userId: pendingData.donorId,
+            message: `Your donation of ৳${pendingData.amount} has been recorded on the blockchain. Transaction ID: ${tran_id}`,
+          });
+        }
+      } catch (notifyError) {
+        console.error("Notification error:", notifyError);
+      }
+
+      // Redirect to success page with donation details
+      const encodedDonation = Buffer.from(JSON.stringify({
+        id: donation._id.toString(),
+        amount: donation.amount,
+        txHash: donation.txHash,
+        blockNumber: donation.blockNumber,
+        tranId: tran_id,
+        status: donation.status,
+      })).toString("base64");
+
+      return NextResponse.redirect(
+        new URL(`/payment/success?data=${encodedDonation}`, request.url)
+      );
+    } catch (processError) {
+      console.error("Payment processing error:", processError);
+      return NextResponse.redirect(
+        new URL(`/?payment=error&message=Payment processing failed&tran_id=${tran_id}`, request.url)
+      );
+    }
   } catch (error) {
     console.error("Payment success GET handler error:", error);
     return NextResponse.redirect(
@@ -50,7 +146,17 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     await connectDB();
-    const body = await request.json();
+    const contentType = request.headers.get("content-type") || "";
+let body: any = {};
+
+if (contentType.includes("application/x-www-form-urlencoded")) {
+  const formData = await request.formData();
+  formData.forEach((value, key) => {
+    body[key] = value;
+  });
+} else {
+  body = await request.json();
+}
     
     const { 
       tran_id, 
@@ -99,6 +205,23 @@ export async function POST(request: NextRequest) {
     // If no pending data, try to find a donor user or use a default
     if (!pendingData || !donorId) {
       console.log("No pending transaction found, using demo mode");
+      // Check if already processed
+  const alreadyDone = await MonetaryDonation.findOne({ 
+    sslTransactionId:  tran_id 
+  });
+  if (alreadyDone) {
+    const encodedDonation = Buffer.from(JSON.stringify({
+      id: alreadyDone._id.toString(),
+      amount: alreadyDone.amount,
+      txHash: alreadyDone.txHash,
+      blockNumber: alreadyDone.blockNumber,
+      tranId: tran_id,
+      status: alreadyDone.status,
+    })).toString("base64");
+    return NextResponse.redirect(
+      new URL(`/payment/success?data=${encodedDonation}`, request.url)
+    );
+  }
       
       // Try to find a donor user to associate with
       const donorUser = await User.findOne({ role: "donor" });
@@ -138,6 +261,11 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
+    // Get next unique block number from MongoDB
+const lastDonation = await MonetaryDonation.findOne({ blockNumber: { $exists: true } })
+  .sort({ blockNumber: -1 })
+  .select("blockNumber");
+const nextBlockNumber = (lastDonation?.blockNumber || 0) + 1;
 
     // Step 1: Record on blockchain
     const block = donationBlockchain.addBlock({
@@ -148,7 +276,7 @@ export async function POST(request: NextRequest) {
       method: method || "demo",
       phone: phone || "N/A",
       email: email || "N/A",
-      sslTransactionId: bank_tran_id || tran_id,
+      sslTransactionId:  tran_id,
       sslValidationId: val_id,
       cardType: card_type || "N/A",
       cardBrand: card_brand || "N/A",
@@ -171,8 +299,8 @@ export async function POST(request: NextRequest) {
       method: validatedMethod,
       phone,
       txHash: `0x${block.hash}`,
-      blockNumber: block.index,
-      sslTransactionId: bank_tran_id || tran_id,
+      blockNumber: nextBlockNumber,
+      sslTransactionId:  tran_id,
       sslValidationId: val_id,
       cardType: card_type,
       cardBrand: card_brand,
@@ -207,23 +335,18 @@ export async function POST(request: NextRequest) {
       console.error("Notification error:", notifyError);
     }
 
-    return NextResponse.json({
-      success: true,
-      message: "Payment successful and recorded",
-      donation: {
-        id: donation._id.toString(),
-        donorId: donation.donorId.toString(),
-        donorName: donation.donorName,
-        amount: donation.amount,
-        method: donation.method,
-        phone: donation.phone,
-        txHash: donation.txHash,
-        blockNumber: donation.blockNumber,
-        sslTransactionId: donation.sslTransactionId,
-        timestamp: donation.createdAt.toISOString(),
-        status: donation.status,
-      },
-    });
+   const encodedDonation = Buffer.from(JSON.stringify({
+  id: donation._id.toString(),
+  amount: donation.amount,
+  txHash: donation.txHash,
+  blockNumber: donation.blockNumber,
+  tranId: tran_id,
+  status: donation.status,
+})).toString("base64");
+
+return NextResponse.redirect(
+  new URL(`/payment/success?data=${encodedDonation}`, request.url)
+);
   } catch (error) {
     console.error("Payment success handler error:", error);
     return NextResponse.json(

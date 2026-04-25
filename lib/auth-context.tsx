@@ -6,9 +6,9 @@ import { store } from "./store"
 
 interface AuthContextType {
   user: User | null
-  login: (email: string, password: string) => Promise<{ success: boolean; error?: string; user?: User }>
+  login: (email: string, password: string, expectedRole?: string) => Promise<{ success: boolean; error?: string; user?: User }>
   registerDonor: (name: string, email: string, phone: string, address: string, password: string) => Promise<{ success: boolean; error?: string; user?: User }>
-  registerVolunteer: (name: string, email: string, phone: string, qualifications: string, password: string) => Promise<{ success: boolean; error?: string }>
+  registerVolunteer: (name: string, email: string, phone: string, qualifications: string, password: string, address?: string) => Promise<{ success: boolean; error?: string }>
   updateUser: (updatedUser: User) => void
   logout: () => void
   isLoading: boolean
@@ -35,9 +35,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const login = useCallback(
-    async (email: string, password: string) => {
+    async (email: string, password: string, expectedRole?: string) => {
       const result = await store.login(email, password)
       if (result.success && result.user) {
+        if (expectedRole && result.user.role !== expectedRole) {
+          return { success: false, error: `role_mismatch:${result.user.role}`, user: result.user }
+        }
         setUser(result.user)
         localStorage.setItem(AUTH_KEY, JSON.stringify(result.user))
       }
@@ -52,20 +55,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!regUser) {
         return { success: false, error: "An account with this email already exists." }
       }
-      // Auto-login after donor registration
-      const loginResult = await store.login(email, password)
-      if (loginResult.success && loginResult.user) {
-        setUser(loginResult.user)
-        localStorage.setItem(AUTH_KEY, JSON.stringify(loginResult.user))
-      }
+      // Do NOT auto-login - user must login manually after registration
       return { success: true, user: regUser }
     },
     []
   )
 
   const registerVolunteer = useCallback(
-    async (name: string, email: string, phone: string, qualifications: string, password: string) => {
-      const regUser = await store.registerVolunteer(name, email, phone, qualifications, password)
+    async (name: string, email: string, phone: string, qualifications: string, password: string, address?: string) => {
+      const regUser = await store.registerVolunteer(name, email, phone, qualifications, password, address)
       if (!regUser) {
         return { success: false, error: "An account with this email already exists." }
       }

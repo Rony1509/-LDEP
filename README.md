@@ -244,3 +244,7 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 - [ ] Mobile app development
 - [ ] Real-time chat between donors and volunteers
 - [ ] Advanced blockchain features (smart contracts, tokenization)
+
+
+<!-- pnpm dev > /dev/null 2> -->
+<!-- pnpm build && pnpm start -->

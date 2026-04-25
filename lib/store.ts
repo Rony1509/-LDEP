@@ -64,12 +64,13 @@ export const store = {
     email: string,
     phone: string,
     qualifications: string,
-    password: string
+    password: string,
+    address?: string
   ): Promise<User | null> {
     try {
       const data = await apiFetch<{ success: boolean; user: User }>("/api/auth/register/volunteer", {
         method: "POST",
-        body: JSON.stringify({ name, email, phone, qualifications, password }),
+        body: JSON.stringify({ name, email, phone, qualifications, password, address }),
       })
       return data.user
     } catch {
@@ -133,18 +134,42 @@ export const store = {
   },
 
   // Physical donations
-  async createPhysicalDonation(
+ async createPhysicalDonation(
     donorId: string,
     donorName: string,
     type: string,
     quantity: number,
+    condition: string,
+    foodType: string,
+    expiryDate: string | null,
     location: string,
+    preferredDate: string | null,
+    timeSlot: string,
+    phone: string,
+    email: string,
     description: string,
-    photoUrl: string
+    photoUrl: string,
+    specialInstructions: string
   ): Promise<PhysicalDonation> {
     return apiFetch<PhysicalDonation>("/api/donations/physical", {
       method: "POST",
-      body: JSON.stringify({ donorId, donorName, type, quantity, location, description, photoUrl }),
+      body: JSON.stringify({
+        donorId,
+        donorName,
+        type,
+        quantity,
+        condition,
+        foodType,
+        expiryDate,
+        location,
+        preferredDate,
+        timeSlot,
+        phone,
+        email,
+        description,
+        photoUrl,
+        specialInstructions,
+      }),
     })
   },
 
@@ -173,17 +198,21 @@ export const store = {
   },
 
   // Tasks
-  async createTask(
+
+ async createTask(
     donationId: string,
     volunteerId: string,
-    deadline: string
+    deadline: string,
+    distance?: string,
+    estimatedTime?: string
   ): Promise<Task | null> {
     try {
       return await apiFetch<Task>("/api/tasks", {
         method: "POST",
-        body: JSON.stringify({ donationId, volunteerId, deadline }),
+        body: JSON.stringify({ donationId, volunteerId, deadline, distance, estimatedTime }),
       })
-    } catch {
+    } 
+    catch {
       return null
     }
   },
@@ -199,6 +228,14 @@ export const store = {
   async getVolunteerTasks(volunteerId: string): Promise<Task[]> {
     try {
       return await apiFetch<Task[]>(`/api/tasks/volunteer/${volunteerId}`)
+    } catch {
+      return []
+    }
+  },
+
+  async getDonorTasks(donorId: string): Promise<Task[]> {
+    try {
+      return await apiFetch<Task[]>(`/api/tasks/donor/${donorId}`)
     } catch {
       return []
     }
@@ -260,6 +297,12 @@ export const store = {
       return []
     }
   },
+  async deleteNotification(notificationId: string, userId: string): Promise<void> {
+    await apiFetch(`/api/notifications/${userId}`, {
+      method: "DELETE",
+      body: JSON.stringify({ id: notificationId }),
+    })
+  },
 
   async markNotificationRead(notificationId: string, userId: string): Promise<void> {
     await apiFetch(`/api/notifications/${userId}/read/${notificationId}`, { method: "PUT" })
@@ -303,6 +346,29 @@ export const store = {
         totalTasks: 0,
         completedTasks: 0,
         pendingTasks: 0,
+      }
+    }
+  },
+
+  // Chart Stats
+  async getChartStats(): Promise<{
+    trends: { month: string; monetary: number; physical: number; donors: number }[]
+    donationTypes: { name: string; value: number }[]
+    categories: { name: string; value: number }[]
+    volunteerPerformance: { name: string; tasks: number }[]
+    areas: { name: string; value: number; count: number }[]
+    totals: { monetary: number; physical: number; activeDonors: number }
+  }> {
+    try {
+      return await apiFetch("/api/stats/charts")
+    } catch {
+      return {
+        trends: [],
+        donationTypes: [],
+        categories: [],
+        volunteerPerformance: [],
+        areas: [],
+        totals: { monetary: 0, physical: 0, activeDonors: 0 }
       }
     }
   },
@@ -385,4 +451,256 @@ export const store = {
       return false
     }
   },
+
+  // Volunteer Location Tracking
+  async updateVolunteerLocation(
+    volunteerId: string,
+    lat: number,
+    lng: number
+  ): Promise<{ success: boolean; taskId?: string; error?: string }> {
+    try {
+      const res = await fetch("/api/volunteer/location", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ volunteerId, lat, lng }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        return { success: false, error: data.error }
+      }
+      return { success: true, taskId: data.taskId }
+    } catch {
+      return { success: false, error: "Network error" }
+    }
+  },
+
+  async getActiveVolunteerLocations(): Promise<
+    {
+      taskId: string
+      volunteerId: string
+      volunteerName: string
+      donationType: string
+      donorName: string
+      location: string
+      volunteerLatitude: number | null
+      volunteerLongitude: number | null
+      donorLatitude: number | null
+      donorLongitude: number | null
+      status: string
+      updatedAt: string
+    }[]
+  > {
+    try {
+      return await apiFetch("/api/volunteer/location")
+    } catch {
+      return []
+    }
+  },
+
+  async getTaskLocation(taskId: string): Promise<{
+    taskId: string
+    volunteerId: string
+    volunteerName: string
+    donationType: string
+    donorName: string
+    location: string
+    volunteerLatitude: number | null
+    volunteerLongitude: number | null
+    donorLatitude: number | null
+    donorLongitude: number | null
+    deliveryLatitude: number | null
+    deliveryLongitude: number | null
+    status: string
+    distanceKm: number | null
+    updatedAt: string
+  } | null> {
+    try {
+      return await apiFetch(`/api/volunteer/location/${taskId}`)
+    } catch {
+      return null
+    }
+  },
+
+  // Get proof photos for donor's tasks
+  async getDonorTaskProofs(donorId: string): Promise<{
+    taskId: string
+    donationType: string
+    location: string
+    volunteerName: string
+    status: string
+    pickupPhotoUrl: string
+    deliveryPhotoUrl: string
+    completedAt: string | null
+  }[]> {
+    try {
+      return await apiFetch(`/api/tasks/donor/${donorId}/proofs`)
+    } catch {
+      return []
+    }
+  },
+
+  // Get task by ID
+  async getTask(taskId: string): Promise<Task | null> {
+    try {
+      return await apiFetch(`/api/tasks/${taskId}`)
+    } catch {
+      return null
+    }
+  },
+
+  // Get nearest volunteers for smart assignment
+  async getNearestVolunteers(
+    latitude: number,
+    longitude: number,
+    maxDistance?: number,
+    limit?: number
+  ): Promise<{
+    id: string
+    name: string
+    email: string
+    phone: string
+    qualifications: string
+    serviceArea: string
+    latitude: number
+    longitude: number
+    distance: number
+    distanceFormatted: string
+    estimatedTime: string
+  }[]> {
+    try {
+      const data = await apiFetch<{ success: boolean; volunteers: any[] }>("/api/volunteers/nearest", {
+        method: "POST",
+        body: JSON.stringify({ latitude, longitude, maxDistance, limit }),
+      })
+      return data.volunteers || []
+    } catch {
+      return []
+    }
+  },
+
+  // Get volunteer stats (completion rate, avg delivery time, ratings)
+  async getVolunteerStats(volunteerId: string): Promise<{
+    volunteer: {
+      id: string
+      name: string
+      email: string
+      phone: string
+      qualifications: string
+      bio: string
+      profilePicture: string
+    }
+    stats: {
+      totalTasks: number
+      completedTasks: number
+      inProgressTasks: number
+      pendingTasks: number
+      completionRate: number
+      avgDeliveryTimeMinutes: number
+      avgResponseTimeMinutes: number
+      totalRatings: number
+      avgRating: number
+    }
+    recentFeedback: {
+      id: string
+      donorName: string
+      rating: number
+      comment: string
+      createdAt: string
+    }[]
+  } | null> {
+    try {
+      return await apiFetch(`/api/volunteers/${volunteerId}/stats`)
+    } catch {
+      return null
+    }
+  },
+
+  // Referral system
+  async getReferralInfo(userId: string): Promise<{
+    referralCode: string
+    referralPoints: number
+    referredBy: { name: string; email: string } | null
+    referredUsers: { name: string; email: string; joinedAt: string }[]
+    totalReferrals: number
+  } | null> {
+    try {
+      return await apiFetch(`/api/referral/${userId}`)
+    } catch {
+      return null
+    }
+  },
+
+  async applyReferral(userId: string, referralCode: string): Promise<{ success: boolean; error?: string }> {
+    try {
+      const res = await fetch("/api/referral/" + userId, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId, referralCode }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        return { success: false, error: data.error }
+      }
+      return { success: true }
+    } catch {
+      return { success: false, error: "Network error" }
+    }
+  },
+
+  async generateReferralCode(userId: string): Promise<{ success: boolean; referralCode?: string; error?: string }> {
+    try {
+      const res = await fetch(`/api/referral/${userId}`, {
+        method: "PUT",
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        return { success: false, error: data.error }
+      }
+      return { success: true, referralCode: data.referralCode }
+    } catch {
+      return { success: false, error: "Network error" }
+    }
+  },
+
+  // Contact Messages
+  async sendContactMessage(name: string, email: string, message: string): Promise<{ success: boolean; error?: string }> {
+    try {
+      const res = await fetch("/api/contact", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, email, message }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        return { success: false, error: data.error }
+      }
+      return { success: true }
+    } catch {
+      return { success: false, error: "Network error" }
+    }
+  },
+
+  async getContactMessages(): Promise<{ _id: string; name: string; email: string; message: string; isRead: boolean; createdAt: string }[]> {
+    try {
+      const data = await apiFetch<{ messages: any[] }>("/api/contact")
+      return data.messages || []
+    } catch {
+      return []
+    }
+  },
+
+  async markContactMessageRead(messageId: string): Promise<{ success: boolean; error?: string }> {
+    try {
+      await apiFetch(`/api/contact/${messageId}`, { method: "PATCH" })
+      return { success: true }
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : "Failed to mark message as read"
+      return { success: false, error: errorMessage }
+    }
+  },
+
+  async deleteContactMessage(messageId: string): Promise<void> {
+    await apiFetch(`/api/contact/${messageId}`, { method: "DELETE" })
+  },
+
 }

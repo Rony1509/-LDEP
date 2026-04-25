@@ -6,6 +6,7 @@ import { toast } from "sonner"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+
 import {
   Table,
   TableBody,
@@ -16,11 +17,13 @@ import {
 } from "@/components/ui/table"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { CheckCircle, XCircle, Clock, UserCheck } from "lucide-react"
+
 import type { User } from "@/lib/types"
 
 export function VolunteerManagement() {
   const [pending, setPending] = useState<User[]>([])
   const [approved, setApproved] = useState<User[]>([])
+  
 
   const loadData = useCallback(async () => {
     const [p, a] = await Promise.all([
@@ -46,6 +49,8 @@ export function VolunteerManagement() {
     toast.error(`${name}'s application has been rejected.`)
     loadData()
   }
+
+ 
 
   return (
     <div className="flex flex-col gap-6">
@@ -86,6 +91,7 @@ export function VolunteerManagement() {
                         <TableHead>Name</TableHead>
                         <TableHead>Email</TableHead>
                         <TableHead>Phone</TableHead>
+                        <TableHead>Address / Service Area</TableHead>
                         <TableHead>Qualifications</TableHead>
                         <TableHead>Date</TableHead>
                         <TableHead className="text-right">Actions</TableHead>
@@ -97,6 +103,7 @@ export function VolunteerManagement() {
                           <TableCell className="font-medium">{v.name}</TableCell>
                           <TableCell>{v.email}</TableCell>
                           <TableCell>{v.phone}</TableCell>
+                          <TableCell className="max-w-[150px] truncate">{v.address || "Not provided"}</TableCell>
                           <TableCell className="max-w-[200px] truncate">{v.qualifications}</TableCell>
                           <TableCell>{new Date(v.createdAt).toLocaleDateString()}</TableCell>
                           <TableCell className="text-right">
@@ -139,8 +146,9 @@ export function VolunteerManagement() {
                         <TableHead>Name</TableHead>
                         <TableHead>Email</TableHead>
                         <TableHead>Phone</TableHead>
-                        <TableHead>Qualifications</TableHead>
+                        <TableHead>Address / Service Area</TableHead>
                         <TableHead>Status</TableHead>
+<TableHead className="min-w-[200px]">Qualifications</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -149,10 +157,16 @@ export function VolunteerManagement() {
                           <TableCell className="font-medium">{v.name}</TableCell>
                           <TableCell>{v.email}</TableCell>
                           <TableCell>{v.phone}</TableCell>
-                          <TableCell className="max-w-[200px] truncate">{v.qualifications}</TableCell>
-                          <TableCell>
-                            <Badge className="bg-success text-success-foreground">Active</Badge>
-                          </TableCell>
+                          <TableCell className="max-w-[150px] truncate">{v.address || "Not provided"}</TableCell>
+                          
+                          
+                        <TableCell>
+  <Badge className="bg-success text-success-foreground">Active</Badge>
+</TableCell>
+<TableCell className="max-w-[250px] whitespace-normal text-sm">
+  {v.qualifications || "Not provided"}
+</TableCell>
+
                         </TableRow>
                       ))}
                     </TableBody>
@@ -163,6 +177,14 @@ export function VolunteerManagement() {
           </Card>
         </TabsContent>
       </Tabs>
+
+     
+          
+      
+            
+
+
+
     </div>
   )
 }

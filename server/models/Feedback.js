@@ -25,4 +25,7 @@ const feedbackSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-export default mongoose.model("Feedback", feedbackSchema);
+// Prevent model overwrite error in development
+const Feedback = mongoose.models.Feedback || mongoose.model("Feedback", feedbackSchema);
+
+export default Feedback;

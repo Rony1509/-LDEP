@@ -12,8 +12,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { KeyRound, ArrowLeft, CheckCircle2 } from "lucide-react"
-
-type AuthMode = "login" | "register-donor" | "register-volunteer" | "forgot-password" | "reset-password"
+import { type AuthMode } from "@/components/auth-modal"
 
 export function ForgotPasswordForm({ onModeChange }: { onModeChange: (m: AuthMode) => void }) {
   const [email, setEmail] = useState("")
@@ -78,7 +77,7 @@ export function ForgotPasswordForm({ onModeChange }: { onModeChange: (m: AuthMod
           <button
             type="button"
             className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline"
-            onClick={() => onModeChange("login")}
+            onClick={() => onModeChange("select-role")}
           >
             <ArrowLeft className="h-3 w-3" />
             Back to Sign In

@@ -5,14 +5,30 @@ import { useAuth } from "@/lib/auth-context"
 import { store } from "@/lib/store"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { DollarSign, Package, Star, TrendingUp } from "lucide-react"
+import { Progress } from "@/components/ui/progress"
+import { DollarSign, Package, Star, TrendingUp, Heart, Users, CheckCircle } from "lucide-react"
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+} from "recharts"
 import type { MonetaryDonation, PhysicalDonation } from "@/lib/types"
+
+interface MonthlyData {
+  month: string
+  amount: number
+}
 
 export function DonorOverview() {
   const { user } = useAuth()
   const [monetaryDonations, setMonetaryDonations] = useState<MonetaryDonation[]>([])
   const [physicalDonations, setPhysicalDonations] = useState<PhysicalDonation[]>([])
   const [myRank, setMyRank] = useState(0)
+  const [monthlyData, setMonthlyData] = useState<MonthlyData[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -26,6 +42,28 @@ export function DonorOverview() {
       setMonetaryDonations(md)
       setPhysicalDonations(pd)
       setMyRank(leaders.findIndex((l) => l.donorId === user!.id) + 1)
+
+      const months = []
+      const now = new Date()
+      for (let i = 5; i >= 0; i--) {
+        const date = new Date(now.getFullYear(), now.getMonth() - i, 1)
+        months.push({
+          date,
+          month: date.toLocaleDateString("en-US", { month: "short" }),
+        })
+      }
+
+      const data = months.map((m) => {
+        const monthDonations = md.filter((d) => {
+          const dDate = new Date(d.timestamp)
+          return dDate.getMonth() === m.date.getMonth() && dDate.getFullYear() === m.date.getFullYear()
+        })
+        return {
+          month: m.month,
+          amount: monthDonations.reduce((sum, d) => sum + d.amount, 0),
+        }
+      })
+      setMonthlyData(data)
       setLoading(false)
     }
     load()
@@ -34,6 +72,22 @@ export function DonorOverview() {
   if (!user) return null
 
   const totalDonated = monetaryDonations.reduce((s, d) => s + d.amount, 0)
+  const totalItems = physicalDonations.reduce((s, d) => s + d.quantity, 0)
+  const estimatedBeneficiaries = Math.floor(totalDonated / 500) + totalItems
+  const nextMilestone = 10000
+  const progressToNext = Math.min((totalDonated / nextMilestone) * 100, 100)
+
+  const milestones = [
+    { name: "Bronze", threshold: 1000, icon: "🥉" },
+    { name: "Silver", threshold: 5000, icon: "🥈" },
+    { name: "Gold", threshold: 10000, icon: "🥇" },
+    { name: "Platinum", threshold: 25000, icon: "💎" },
+    { name: "Diamond", threshold: 50000, icon: "💠" },
+  ]
+
+  const currentMilestone = milestones.find((m) => totalDonated < m.threshold) || milestones[milestones.length - 1]
+  const milestoneIndex = milestones.findIndex((m) => m.name === currentMilestone.name)
+  const nextMilestoneName = currentMilestone.name
 
   if (loading) {
     return <div className="py-8 text-center text-muted-foreground">Loading...</div>
@@ -45,6 +99,35 @@ export function DonorOverview() {
         <h1 className="text-2xl font-bold text-foreground">Welcome, {user.name}</h1>
         <p className="text-muted-foreground">Your donation activity at a glance</p>
       </div>
+
+      {/* Impact Meter */}
+      <Card className="border-primary/20 bg-gradient-to-r from-primary/5 to-primary/10">
+        <CardHeader className="pb-2">
+          <CardTitle className="flex items-center gap-2 text-lg">
+            <Heart className="h-5 w-5 text-primary" />
+            Your Impact
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center gap-6">
+            <div className="flex h-20 w-20 items-center justify-center rounded-full border-4 border-primary/30 bg-primary/10">
+              <Users className="h-8 w-8 text-primary" />
+            </div>
+            <div className="flex-1">
+              <div className="mb-2 flex items-center justify-between">
+                <span className="text-3xl font-bold text-primary">{estimatedBeneficiaries}</span>
+                <span className="text-sm text-muted-foreground">people helped</span>
+              </div>
+              <Progress value={progressToNext} className="h-3" />
+              <p className="mt-1 text-xs text-muted-foreground">
+                {nextMilestone - totalDonated > 0
+                  ? `৳${(nextMilestone - totalDonated).toLocaleString()} more to reach ${nextMilestoneName}`
+                  : `You've reached ${nextMilestoneName} level!`}
+              </p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Card>
@@ -58,7 +141,7 @@ export function DonorOverview() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-card-foreground">
-              {"৳"}{totalDonated.toLocaleString()}
+              ৳{totalDonated.toLocaleString()}
             </div>
           </CardContent>
         </Card>
@@ -82,7 +165,7 @@ export function DonorOverview() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
-              Physical Donations
+              Physical Items
             </CardTitle>
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent/10">
               <Package className="h-4 w-4 text-accent" />
@@ -90,7 +173,7 @@ export function DonorOverview() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-card-foreground">
-              {physicalDonations.length}
+              {totalItems}
             </div>
           </CardContent>
         </Card>
@@ -112,44 +195,91 @@ export function DonorOverview() {
         </Card>
       </div>
 
-      {/* Recent monetary donations */}
+      {/* My Donation History - Bar Chart */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg">My Donation History</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="h-64">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={monthlyData}>
+                <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                <XAxis dataKey="month" className="text-xs" />
+                <YAxis className="text-xs" />
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: "hsl(var(--card))",
+                    border: "1px solid hsl(var(--border))",
+                    borderRadius: "8px",
+                  }}
+                  formatter={(value: number) => [`৳${value.toLocaleString()}`, "Amount"]}
+                />
+                <Bar
+                  dataKey="amount"
+                  fill="#0088FE"
+                  radius={[4, 4, 0, 0]}
+                  name="Donation"
+                />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Recent donations */}
       <Card>
         <CardHeader>
           <CardTitle className="text-lg">Recent Donations</CardTitle>
         </CardHeader>
         <CardContent>
-          {monetaryDonations.length === 0 ? (
+          {monetaryDonations.length === 0 && physicalDonations.length === 0 ? (
             <p className="py-4 text-center text-muted-foreground">
               You have not made any donations yet.
             </p>
           ) : (
             <div className="flex flex-col gap-3">
-              {monetaryDonations
-                .slice(0, 5)
-                .map((d) => (
-                  <div
-                    key={d.id}
-                    className="flex items-center justify-between rounded-lg border border-border p-3"
-                  >
-                    <div className="flex flex-col gap-0.5">
-                      <p className="text-sm font-medium text-card-foreground">
-                        {"৳"}{d.amount.toLocaleString()} via{" "}
-                        {d.method === "bkash" ? "bKash" : "Nagad"}
-                      </p>
-                      <p className="font-mono text-xs text-muted-foreground">
-                        {d.txHash.substring(0, 24)}...
-                      </p>
-                    </div>
-                    <div className="flex flex-col items-end gap-0.5">
-                      <Badge className="bg-success text-success-foreground">
-                        Confirmed
-                      </Badge>
-                      <p className="text-xs text-muted-foreground">
-                        {new Date(d.timestamp).toLocaleDateString()}
-                      </p>
-                    </div>
+              {monetaryDonations.slice(0, 5).map((d) => (
+                <div
+                  key={d.id}
+                  className="flex items-center justify-between rounded-lg border border-border p-3"
+                >
+                  <div className="flex flex-col gap-0.5">
+                    <p className="text-sm font-medium text-card-foreground">
+                      ৳{d.amount.toLocaleString()} via{" "}
+                      {d.method === "bkash" ? "bKash" : "Nagad"}
+                    </p>
+                    <p className="font-mono text-xs text-muted-foreground">
+                      {d.txHash ? `${d.txHash.substring(0, 24)}...` : "Manual submission"}
+                    </p>
                   </div>
-                ))}
+                  <div className="flex flex-col items-end gap-0.5">
+                    <Badge className="bg-success text-success-foreground">Confirmed</Badge>
+                    <p className="text-xs text-muted-foreground">
+                      {new Date(d.timestamp).toLocaleDateString()}
+                    </p>
+                  </div>
+                </div>
+              ))}
+              {physicalDonations.slice(0, 3).map((d) => (
+                <div
+                  key={d.id}
+                  className="flex items-center justify-between rounded-lg border border-border p-3"
+                >
+                  <div className="flex flex-col gap-0.5">
+                    <p className="text-sm font-medium text-card-foreground">
+                      {d.quantity}x {d.type}
+                    </p>
+                    <p className="text-xs text-muted-foreground">{d.location}</p>
+                  </div>
+                  <div className="flex flex-col items-end gap-0.5">
+                    <Badge className="bg-primary/10 text-primary">{d.status}</Badge>
+                    <p className="text-xs text-muted-foreground">
+                      {new Date(d.createdAt).toLocaleDateString()}
+                    </p>
+                  </div>
+                </div>
+              ))}
             </div>
           )}
         </CardContent>

@@ -12,14 +12,14 @@ export async function GET(request: NextRequest) {
       pendingTransactionsStore.delete(tran_id);
     }
 
-    // Redirect to frontend with cancellation info
+    // Redirect to payment cancel page
     return NextResponse.redirect(
-      new URL(`/?payment=cancelled&tran_id=${tran_id || ""}`, request.url)
+      new URL(`/payment/cancel?tran_id=${tran_id || ""}`, request.url)
     );
   } catch (error) {
     console.error("Payment cancel GET handler error:", error);
     return NextResponse.redirect(
-      new URL("/?payment=error&message=Unknown error", request.url)
+      new URL("/payment/cancel", request.url)
     );
   }
 }

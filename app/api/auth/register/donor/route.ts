@@ -7,6 +7,16 @@ export async function POST(request: Request) {
   try {
     await connectDB();
     const { name, email, phone, address, password } = await request.json();
+    
+    // Validate phone number (must be 11 digits)
+    const phoneDigits = phone.replace(/\D/g, "");
+    if (phoneDigits.length !== 11) {
+      return NextResponse.json(
+        { error: "Phone number must be exactly 11 digits" },
+        { status: 400 }
+      );
+    }
+    
     const existing = await User.findOne({ email });
     if (existing) {
       return NextResponse.json(

@@ -4,6 +4,7 @@ import MonetaryDonation from "@/server/models/MonetaryDonation";
 import Notification from "@/server/models/Notification";
 import User from "@/server/models/User";
 import donationBlockchain from "@/server/blockchain/blockchain";
+import { notifyDonationConfirmed, notifyVolunteerAssigned, notifyDeliveryCompleted, notifyVolunteerWelcome } from "@/lib/email-service";
 
 export async function GET() {
   try {
@@ -37,7 +38,7 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     await connectDB();
-    const { donorId, donorName, amount, method, phone } = await request.json();
+    const { donorId, donorName, amount, method, phone, email } = await request.json();
 
     // Record on blockchain
     const block = donationBlockchain.addBlock({
@@ -56,6 +57,7 @@ export async function POST(request: Request) {
       amount,
       method,
       phone,
+      email,
       txHash: `0x${block.hash}`,
       blockNumber: block.index,
       status: "completed",
@@ -76,6 +78,11 @@ export async function POST(request: Request) {
       message: `Your donation of ৳${amount} has been recorded on the blockchain.`,
     });
 
+    // Send email notification to donor
+    if (email) {
+      notifyDonationConfirmed(email, donorName, amount, `0x${block.hash}`).catch(console.error);
+    }
+
     return NextResponse.json(
       {
         id: donation._id.toString(),
@@ -84,6 +91,7 @@ export async function POST(request: Request) {
         amount: donation.amount,
         method: donation.method,
         phone: donation.phone,
+        email: donation.email,
         txHash: donation.txHash,
         blockNumber: donation.blockNumber,
         timestamp: donation.createdAt.toISOString(),

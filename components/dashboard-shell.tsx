@@ -22,6 +22,7 @@ import {
   Link2,
   Menu,
   X,
+  Trash2,
 } from "lucide-react"
 import type { ReactNode } from "react"
 import type { Notification } from "@/lib/types"
@@ -51,6 +52,7 @@ export function DashboardShell({
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [unreadCount, setUnreadCount] = useState(0)
   const [notifications, setNotifications] = useState<Notification[]>([])
+  const [removingIds, setRemovingIds] = useState<Set<string>>(new Set())
 
   const loadNotifications = useCallback(async () => {
     if (!user) return
@@ -64,7 +66,11 @@ export function DashboardShell({
 
   useEffect(() => {
     loadNotifications()
-    const interval = setInterval(loadNotifications, 10000)
+    const interval = setInterval(() => {
+      if (!document.hidden) loadNotifications()
+    }, 30000)
+    
+
     return () => clearInterval(interval)
   }, [loadNotifications])
 
@@ -78,6 +84,28 @@ export function DashboardShell({
   async function handleMarkRead(id: string) {
     await store.markNotificationRead(id, user!.id)
     loadNotifications()
+  }
+
+  async function handleDelete(id: string) {
+    setRemovingIds((prev) => new Set(prev).add(id))
+    setTimeout(async () => {
+      try {
+        await store.deleteNotification(id, user!.id)
+        setNotifications((prev) => prev.filter((n) => n.id !== id))
+        setRemovingIds((prev) => {
+          const next = new Set(prev)
+          next.delete(id)
+          return next
+        })
+        loadNotifications()
+      } catch {
+        setRemovingIds((prev) => {
+          const next = new Set(prev)
+          next.delete(id)
+          return next
+        })
+      }
+    }, 300)
   }
 
   return (
@@ -146,15 +174,56 @@ export function DashboardShell({
                     notifications.slice(0, 10).map((n) => (
                       <DropdownMenuItem
                         key={n.id}
-                        className="flex flex-col items-start gap-1 py-3"
-                        onClick={() => handleMarkRead(n.id)}
+                        className="flex items-start gap-2 p-3 cursor-default transition-all duration-300"
+                        style={{
+                          opacity: removingIds.has(n.id) ? 0 : 1,
+                          transform: removingIds.has(n.id)
+                            ? "translateX(20px)"
+                            : "translateX(0)",
+                        }}
                       >
-                        <span className={`text-sm ${n.read ? "text-muted-foreground" : "font-medium text-foreground"}`}>
-                          {n.message}
-                        </span>
-                        <span className="text-xs text-muted-foreground">
-                          {new Date(n.createdAt).toLocaleDateString()}
-                        </span>
+                        <div className="flex-1 min-w-0">
+                          <span
+                            className={`text-sm block ${
+                              n.read
+                                ? "text-muted-foreground"
+                                : "font-medium text-foreground"
+                            }`}
+                          >
+                            {n.message}
+                          </span>
+                          <span className="text-xs text-muted-foreground">
+                            {new Date(n.createdAt).toLocaleDateString()}
+                          </span>
+                        </div>
+                        <div className="flex gap-1 flex-shrink-0">
+                          {!n.read && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-6 w-6 p-0 opacity-70 hover:opacity-100"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                handleMarkRead(n.id)
+                              }}
+                              title="Mark as read"
+                            >
+                              <X className="h-3 w-3" />
+                            </Button>
+                          )}
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-6 w-6 p-0 opacity-70 hover:opacity-100 hover:text-destructive"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              handleDelete(n.id)
+                            }}
+                            title="Delete notification"
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </Button>
+                        </div>
                       </DropdownMenuItem>
                     ))
                   )}

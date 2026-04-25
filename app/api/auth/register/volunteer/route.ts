@@ -6,8 +6,18 @@ import Notification from "@/server/models/Notification";
 export async function POST(request: Request) {
   try {
     await connectDB();
-    const { name, email, phone, qualifications, password } =
+    const { name, email, phone, qualifications, password, address } =
       await request.json();
+    
+    // Validate phone number (must be 11 digits)
+    const phoneDigits = phone.replace(/\D/g, "");
+    if (phoneDigits.length !== 11) {
+      return NextResponse.json(
+        { error: "Phone number must be exactly 11 digits" },
+        { status: 400 }
+      );
+    }
+    
     const existing = await User.findOne({ email });
     if (existing) {
       return NextResponse.json(
@@ -20,6 +30,7 @@ export async function POST(request: Request) {
       email,
       phone,
       qualifications,
+      address: address || "",
       role: "volunteer",
       volunteerStatus: "pending",
       password,
@@ -42,7 +53,7 @@ export async function POST(request: Request) {
           email: user.email,
           phone: user.phone,
           role: user.role,
-          address: "",
+          address: user.address || "",
           qualifications: user.qualifications || "",
           bio: "",
           profilePicture: "",

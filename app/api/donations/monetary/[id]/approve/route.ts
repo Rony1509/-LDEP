@@ -47,6 +47,16 @@ export async function POST(request: NextRequest) {
     }
 
     // Update donation status to completed
+    // Generate unique blockchain record (monetary starts at 1, physical starts at 100)
+    const monetaryCount = await MonetaryDonation.countDocuments({ status: "completed" });
+    donation.blockNumber = monetaryCount + 1;
+    donation.txHash =
+      "0x" +
+      Array.from({ length: 64 }, () =>
+        Math.floor(Math.random() * 16).toString(16)
+      ).join("");
+
+    // Update donation status to completed
     donation.status = "completed";
     
     // Only set verifiedBy if it's a valid ObjectId
@@ -63,10 +73,10 @@ export async function POST(request: NextRequest) {
 
     // Notify donor
     try {
-      await Notification.create({
-        userId: donation.donorId,
-        message: `Your donation of ৳${donation.amount} has been verified and approved! Transaction ID: ${donation.manualTransactionId}`,
-      });
+        await Notification.create({
+  userId: donation.donorId,
+  message: `We appreciate your donation. Thank you for supporting our mission.`,
+});
     } catch (notifyError) {
       console.error("Notification error:", notifyError);
     }

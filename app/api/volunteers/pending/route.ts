@@ -17,6 +17,8 @@ export async function GET() {
         phone: u.phone,
         role: u.role,
         qualifications: u.qualifications || "",
+        address: u.address || "",
+serviceArea: u.serviceArea || "",
         volunteerStatus: u.volunteerStatus,
         createdAt: u.createdAt.toISOString(),
       }))

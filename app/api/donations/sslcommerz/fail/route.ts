@@ -13,14 +13,16 @@ export async function GET(request: NextRequest) {
       pendingTransactionsStore.delete(tran_id);
     }
 
-    // Redirect to frontend with failure info
+    const message = encodeURIComponent("Your payment was not completed. Please try again.");
+
+    // Redirect to payment fail page
     return NextResponse.redirect(
-      new URL(`/?payment=failed&tran_id=${tran_id || ""}`, request.url)
+      new URL(`/payment/fail?tran_id=${tran_id || ""}&message=${message}`, request.url)
     );
   } catch (error) {
     console.error("Payment fail GET handler error:", error);
     return NextResponse.redirect(
-      new URL("/?payment=error&message=Unknown error", request.url)
+      new URL("/payment/fail", request.url)
     );
   }
 }

@@ -8,6 +8,7 @@ export async function GET() {
     const volunteers = await User.find({
       role: "volunteer",
       volunteerStatus: "approved",
+      
     }).sort({ createdAt: -1 });
     return NextResponse.json(
       volunteers.map((u) => ({
@@ -17,6 +18,8 @@ export async function GET() {
         phone: u.phone,
         role: u.role,
         qualifications: u.qualifications || "",
+        address: u.address || "",
+serviceArea: u.serviceArea || "",
         volunteerStatus: u.volunteerStatus,
         createdAt: u.createdAt.toISOString(),
       }))

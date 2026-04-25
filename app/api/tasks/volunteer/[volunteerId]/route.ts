@@ -22,8 +22,20 @@ export async function GET(
         deadline: t.deadline.toISOString(),
         status: t.status,
         proofPhotoUrl: t.proofPhotoUrl || "",
+        pickupPhotoUrl: t.pickupPhotoUrl || "",
+        deliveryPhotoUrl: t.deliveryPhotoUrl || "",
+        donorLatitude: t.donorLatitude || null,
+        donorLongitude: t.donorLongitude || null,
+        deliveryLatitude: t.deliveryLatitude || null,
+        deliveryLongitude: t.deliveryLongitude || null,
+        volunteerLatitude: t.volunteerLatitude || null,
+        volunteerLongitude: t.volunteerLongitude || null,
         assignedAt: t.assignedAt.toISOString(),
+        startedAt: t.startedAt ? t.startedAt.toISOString() : null,
         completedAt: t.completedAt ? t.completedAt.toISOString() : null,
+        donorPhone: t.donorPhone || "",
+        distance: t.distance || null,
+        estimatedTime: t.estimatedTime || null,
       }))
     );
   } catch (err: unknown) {

@@ -33,7 +33,7 @@ export default function RootLayout({
       <body className="font-sans antialiased">
         <AuthProvider>
           {children}
-          <Toaster richColors position="top-right" />
+          <Toaster richColors position="top-right" closeButton duration={5000} />
         </AuthProvider>
       </body>
     </html>

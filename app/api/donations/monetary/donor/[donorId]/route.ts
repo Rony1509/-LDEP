@@ -13,19 +13,21 @@ export async function GET(
       createdAt: -1,
     });
     return NextResponse.json(
-      donations.map((d) => ({
-        id: d._id.toString(),
-        donorId: d.donorId.toString(),
-        donorName: d.donorName,
-        amount: d.amount,
-        method: d.method,
-        phone: d.phone,
-        txHash: d.txHash,
-        blockNumber: d.blockNumber,
-        timestamp: d.createdAt.toISOString(),
-        status: d.status,
-      }))
-    );
+  donations.map((d) => ({
+    id: d._id.toString(),
+    donorId: d.donorId.toString(),
+    donorName: d.donorName,
+    amount: d.amount,
+    method: d.method,
+    phone: d.phone,
+    txHash: d.txHash,
+    blockNumber: d.blockNumber,
+    sslTransactionId: d.sslTransactionId,
+    manualTransactionId: d.manualTransactionId,
+    timestamp: d.createdAt.toISOString(),
+    status: d.status,
+  }))
+);
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Server error";
     return NextResponse.json({ error: message }, { status: 500 });
